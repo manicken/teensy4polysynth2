@@ -69,7 +69,8 @@ class Synth
     Voice                            voices[80];
     AudioMixer<80>                   mixVoices;
     AudioOutputPT8211_2              pt8211_2_1;
-    AudioConnection                  *patchCord[82]; // total patchCordCount:82 including array typed ones.
+    AudioOutputUSB                   usb2;
+    AudioConnection                  *patchCord[84]; // total patchCordCount:84 including array typed ones.
 
     Synth() // constructor (this is called when class-object is created)
     {
@@ -78,12 +79,33 @@ class Synth
 
         patchCord[pci++] = new AudioConnection(mixVoices, 0, pt8211_2_1, 0);
         patchCord[pci++] = new AudioConnection(mixVoices, 0, pt8211_2_1, 1);
+        patchCord[pci++] = new AudioConnection(mixVoices, 0, usb2, 0);
+        patchCord[pci++] = new AudioConnection(mixVoices, 0, usb2, 1);
         for (int i = 0; i < 80; i++)
         {
             patchCord[pci++] = new AudioConnection(voices[i].env, 0, mixVoices, i);
         }
     }
 
+    void begin()
+    {
+        for (int i = 0; i < VOICE_COUNT; i++)
+        {
+            voices[i].begin();
+            mixVoices.gain(i, 1.0f/VOICE_COUNT);
+        }
+        pinMode(NOTE_OVERFLOWN_LED, OUTPUT);
+        digitalWrite(NOTE_OVERFLOWN_LED, LOW);
+    
+        pinMode(NOTE_PRESSED_STATE_LED, OUTPUT);
+        digitalWrite(NOTE_PRESSED_STATE_LED, LOW);
+    
+        EEPROM_ReadSettings();
+    
+        set_InstrumentByIndex(1); // VelocityGrandPiano
+        //mixFinal.gain(1.0f);
+    }
+    
     void noteOn(byte note, byte velocity)
     {
         digitalWrite(NOTE_PRESSED_STATE_LED, HIGH); //any note "pressed"
@@ -117,6 +139,7 @@ class Synth
         }
         digitalWrite(NOTE_OVERFLOWN_LED, HIGH); // this is a notification that there was no free spots
     }
+    
     void noteOff(byte note)
     {
         digitalWrite(NOTE_PRESSED_STATE_LED, LOW); //any note "released"
@@ -129,14 +152,16 @@ class Synth
             }
         }
     }
+    
+    
     void activateSustain()
     {
         for (int i = 0; i < VOICE_COUNT; i++)
         {
             voices[i].isSustain = 1;
-    
         }
     }
+    
     void deactivateSustain()
     {
         for (int i = 0; i < VOICE_COUNT; i++)
@@ -146,289 +171,253 @@ class Synth
                 voices[i].noteOff();
         }
     }
-    void begin()
-    {
-        for (int i = 0; i < VOICE_COUNT; i++)
-        {
-            voices[i].begin();
-            mixVoices.gain(i, 1.0f/VOICE_COUNT);
-        }
-        pinMode(NOTE_OVERFLOWN_LED, OUTPUT);
-        digitalWrite(NOTE_OVERFLOWN_LED, LOW);
-    
-        pinMode(NOTE_PRESSED_STATE_LED, OUTPUT);
-        digitalWrite(NOTE_PRESSED_STATE_LED, LOW);
-    
-        EEPROM_ReadSettings();
-    
-        set_InstrumentByIndex(1); // VelocityGrandPiano
-        //mixFinal.gain(1.0f);
-    }
-    
     
     void set_InstrumentByIndex(byte index)
+    {
+        currentWTinstrument = index;
+        switch(index)
         {
-            currentWTinstrument = index;
-            switch(index)
-            {
-                case 0:
-                    SetWaveForm_As_Primary();
-                    break;
-                case 1:
-                    SetWaveTable_As_Primary();
-                    set_Instrument(VelocityGrandPiano);
-                    //synth_set_Instrument(_16layerspiano);
-                    break;
-                case 2:
-                    SetWaveTable_As_Primary();
-                    set_Instrument(StereoGrand1);
-                    break;
-                case 3:
-                    SetWaveTable_As_Primary();
-                    set_Instrument(ObieSynth1);
-                    break;
-                case 4:
-                    SetWaveTable_As_Primary();
-                    set_Instrument(MmmmHumSynth);
-                    break;
-                default:
-                    break;
-            }
+            case 0:
+                SetWaveForm_As_Primary();
+                break;
+            case 1:
+                SetWaveTable_As_Primary();
+                set_Instrument(VelocityGrandPiano);
+                //synth_set_Instrument(_16layerspiano);
+                break;
+            case 2:
+                SetWaveTable_As_Primary();
+                set_Instrument(StereoGrand1);
+                break;
+            case 3:
+                SetWaveTable_As_Primary();
+                set_Instrument(ObieSynth1);
+                break;
+            case 4:
+                SetWaveTable_As_Primary();
+                set_Instrument(MmmmHumSynth);
+                break;
+            default:
+                break;
         }
-        void set_Instrument(const AudioSynthWavetable::instrument_data &instrument)
-        {
-            for (int i = 0; i< VOICE_COUNT; i++)
-            {
-                voices[i].waveTable.setInstrument(instrument);
-                voices[i].waveTable.amplitude(1.0);
-            }
-        }
-        void set_OSC_A_waveform(byte wf)
-        {
-            if (wf > 8) wf = 8;
-            oscAwaveform = wf;
-            for (int i = 0; i < VOICE_COUNT; i++)
-            {
-                voices[i].oscA.begin(wf);
-            }
-        }
-        void set_OSC_B_waveform(byte wf)
-        {
-            if (wf > 8) wf = 8;
-            oscBwaveform = wf;
-            for (int i = 0; i < VOICE_COUNT; i++)
-            {
-                voices[i].oscB.begin(wf);
-            }
-        }
-        void set_OSC_C_waveform(byte wf)
-        {
-            if (wf > 8) wf = 8;
-            oscCwaveform = wf;
-            for (int i = 0; i < VOICE_COUNT; i++)
-            {
-                voices[i].oscC.begin(wf);
+    }
     
-                //voices[i].oscD.begin(wf); // experimental
-            }
-        }
-        void set_OSC_A_pulseWidth(byte value)
+    void set_Instrument(const AudioSynthWavetable::instrument_data &instrument)
+    {
+        for (int i = 0; i< VOICE_COUNT; i++)
         {
-            if (value > 100) value = 100;
-            oscApulsewidth = value;
-            for (int i = 0; i < VOICE_COUNT; i++)
-            {
-                voices[i].oscA.pulseWidth(value*DIV100);
-            }
+            voices[i].waveTable.setInstrument(instrument);
+            voices[i].waveTable.amplitude(1.0);
         }
-        void set_OSC_B_pulseWidth(byte value)
-        {
-            if (value > 100) value = 100;
-            oscBpulsewidth = value;
-            for (int i = 0; i < VOICE_COUNT; i++)
-            {
-                voices[i].oscB.pulseWidth(value*DIV100);
-            }
-        }
-        void set_OSC_C_pulseWidth(byte value)
-        {
-            if (value > 100) value = 100;
-            oscCpulsewidth = value;
-            for (int i = 0; i < VOICE_COUNT; i++)
-            {
-                voices[i].oscC.pulseWidth(value*DIV100);
-            }
-        }
-        void set_OSC_A_phase(byte value)
-        {
-            if (value > 120) value = 120;
-            oscAphase = value;
-            for (int i = 0; i < VOICE_COUNT; i++)
-            {
-                voices[i].oscA.phase(value*DIV360BY120);
-            }
-        }
-        void set_OSC_B_phase(byte value)
-        {
-            if (value > 120) value = 120;
-            oscBphase = value;
-            for (int i = 0; i < VOICE_COUNT; i++)
-            {
-                voices[i].oscB.phase(value*DIV360BY120);
-            }
-        }
-        void set_OSC_C_phase(byte value)
-        {
-            if (value > 120) value = 120;
-            oscCphase = value;
-            for (int i = 0; i < VOICE_COUNT; i++)
-            {
-                voices[i].oscC.phase(value*DIV360BY120);
-            }
-        }
-        void set_OSC_A_amplitude(byte value)
-        {
-            if (value > 100) value = 100;
-            oscAamp = value;
-            for (int i = 0; i < VOICE_COUNT; i++)
-            {
-                voices[i].mix.gain(0,value*DIV100);
-            }
-        }
-        void set_OSC_B_amplitude(byte value)
-        {
-            if (value > 100) value = 100;
-            oscBamp = value;
-            for (int i = 0; i < VOICE_COUNT; i++)
-            {
-                voices[i].mix.gain(1, value*DIV100);
-            }
-        }
-        void set_OSC_C_amplitude(byte value)
-        {
-            if (value > 100) value = 100;
-            oscCamp = value;
-            for (int i = 0; i < VOICE_COUNT; i++)
-            {
-                voices[i].mix.gain(2, value*DIV100);
-            }
-        }
-        void set_OSC_D_amplitude(byte value)
-        {
-            if (value > 100) value = 100;
-            oscDamp = value;
-            for (int i = 0; i < VOICE_COUNT; i++)
-            {
-                voices[i].mix.gain(3, value*DIV100);
-            }
-        }
-        void set_mixVoices_gains(byte value)
-        {
-            if (value > 100) value = 100;
-            mixVoices_gains = value;
-            for (int i = 0; i < VOICE_COUNT; i++)
-                mixVoices.gain(i, value*DIV100);
-        }
+    }
     
-        void set_envelope_delay(byte value)
-        {
-            if (value > 127) value = 127;
-            envDelay = value;
-            for (int i = 0; i < VOICE_COUNT; i++)
-            {
-                voices[i].env.delay((float)value*(float)10);
-            }
-        }
-        void set_envelope_attack(byte value)
-        {
-            if (value > 127) value = 127;
-            envAttack = value;
-            for (int i = 0; i < VOICE_COUNT; i++)
-            {
-                voices[i].env.attack((float)value*(float)10);
-            }
-        }
-        void set_envelope_hold(byte value)
-        {
-            if (value > 127) value = 127;
-            envHold = value;
-            for (int i = 0; i < VOICE_COUNT; i++)
-            {
-                voices[i].env.hold((float)value*(float)10);
-            }
-        }
-        void set_envelope_decay(byte value)
-        {
-            if (value > 127) value = 127;
-            envDecay = value;
-            for (int i = 0; i < VOICE_COUNT; i++)
-            {
-                voices[i].env.decay((float)value*(float)10);
-            }
-        }
-        void set_envelope_sustain(byte value)
-        {
-            if (value > 100) value = 100;
-            envSustain = value;
-            for (int i = 0; i < VOICE_COUNT; i++)
-            {
-                voices[i].env.sustain(value*DIV100);
-            }
-        }
-        void set_envelope_release(byte value)
-        {
-            if (value > 127) value = 127;
-            envRelease = value;
-            for (int i = 0; i < VOICE_COUNT; i++)
-            {
-                voices[i].env.release((float)value*(float)10);
-            }
-        }
-        void set_OSC_A_freqMult(byte value)
-        {
-            if (value > 127) value = 64;
-            oscApitchMult = value; // local storage for LOAD/SAVE/sendAllSettings()
-            for (int i = 0; i < VOICE_COUNT; i++)
-            {
-                voices[i].oscApitchMult = value;
-            }
-        }
-        void set_OSC_B_freqMult(byte value)
-        {
-            if (value > 127) value = 64;
-            oscBpitchMult = value; // local storage for LOAD/SAVE/sendAllSettings()
-            for (int i = 0; i < VOICE_COUNT; i++)
-            {
-                voices[i].oscBpitchMult = value;
-            }
-        }
-        void set_OSC_C_freqMult(byte value)
-        {
-            if (value > 127) value = 64;
-            oscCpitchMult = value; // local storage for LOAD/SAVE/sendAllSettings()
-            for (int i = 0; i < VOICE_COUNT; i++)
-            {
-                voices[i].oscCpitchMult = value;
-            }
-        }
+    void set_mixVoices_gains(byte value)
+    {
+        if (value > 100) value = 100;
+        mixVoices_gains = value;
+        for (int i = 0; i < VOICE_COUNT; i++)
+            mixVoices.gain(i, value*DIV100);
+    }
     
-        void SetWaveTable_As_Primary()
-        {
-            set_OSC_A_amplitude(0);
-            set_OSC_B_amplitude(0);
-            set_OSC_C_amplitude(0);
-            set_OSC_D_amplitude(100);
-            set_mixVoices_gains(100);
-        }
+    void SetWaveTable_As_Primary()
+    {
+        set_OSC_A_amplitude(0);
+        set_OSC_B_amplitude(0);
+        set_OSC_C_amplitude(0);
+        set_OSC_D_amplitude(100);
+        set_mixVoices_gains(100);
+    }
     
-        void SetWaveForm_As_Primary()
+    void SetWaveForm_As_Primary()
+    {
+        set_OSC_A_amplitude(100);
+        set_OSC_B_amplitude(100);
+        set_OSC_C_amplitude(100);
+        set_OSC_D_amplitude(0);
+        set_mixVoices_gains(3);
+    }
+    
+    void set_OSC_A_waveform(byte wf)
+    {
+        if (wf > 8) wf = 8;
+        oscAwaveform = wf;
+        for (int i = 0; i < VOICE_COUNT; i++)
         {
-            set_OSC_A_amplitude(100);
-            set_OSC_B_amplitude(100);
-            set_OSC_C_amplitude(100);
-            set_OSC_D_amplitude(0);
-            set_mixVoices_gains(3);
+            voices[i].oscA.begin(wf);
         }
+    }
+    
+    void set_OSC_B_waveform(byte wf)
+    {
+        if (wf > 8) wf = 8;
+        oscBwaveform = wf;
+        for (int i = 0; i < VOICE_COUNT; i++)
+        {
+            voices[i].oscB.begin(wf);
+        }
+    }
+    
+    void set_OSC_C_waveform(byte wf)
+    {
+        if (wf > 8) wf = 8;
+        oscCwaveform = wf;
+        for (int i = 0; i < VOICE_COUNT; i++)
+        {
+            voices[i].oscC.begin(wf);
+    
+            //voices[i].oscD.begin(wf); // experimental
+        }
+    }
+    
+    void set_OSC_A_pulseWidth(byte value)
+    {
+        if (value > 100) value = 100;
+        oscApulsewidth = value;
+        for (int i = 0; i < VOICE_COUNT; i++)
+        {
+            voices[i].oscA.pulseWidth(value*DIV100);
+        }
+    }
+    
+    void set_OSC_B_pulseWidth(byte value)
+    {
+        if (value > 100) value = 100;
+        oscBpulsewidth = value;
+        for (int i = 0; i < VOICE_COUNT; i++)
+        {
+            voices[i].oscB.pulseWidth(value*DIV100);
+        }
+    }
+    
+    void set_OSC_C_pulseWidth(byte value)
+    {
+        if (value > 100) value = 100;
+        oscCpulsewidth = value;
+        for (int i = 0; i < VOICE_COUNT; i++)
+        {
+            voices[i].oscC.pulseWidth(value*DIV100);
+        }
+    }
+    
+    void set_OSC_A_phase(byte value)
+    {
+        if (value > 120) value = 120;
+        oscAphase = value;
+        for (int i = 0; i < VOICE_COUNT; i++)
+        {
+            voices[i].oscA.phase(value*DIV360BY120);
+        }
+    }
+    
+    void set_OSC_B_phase(byte value)
+    {
+        if (value > 120) value = 120;
+        oscBphase = value;
+        for (int i = 0; i < VOICE_COUNT; i++)
+        {
+            voices[i].oscB.phase(value*DIV360BY120);
+        }
+    }
+    
+    void set_OSC_C_phase(byte value)
+    {
+        if (value > 120) value = 120;
+        oscCphase = value;
+        for (int i = 0; i < VOICE_COUNT; i++)
+        {
+            voices[i].oscC.phase(value*DIV360BY120);
+        }
+    }
+    
+    void set_envelope_delay(byte value)
+    {
+        if (value > 127) value = 127;
+        envDelay = value;
+        for (int i = 0; i < VOICE_COUNT; i++)
+        {
+            voices[i].env.delay((float)value*(float)10);
+        }
+    }
+    
+    void set_envelope_attack(byte value)
+    {
+        if (value > 127) value = 127;
+        envAttack = value;
+        for (int i = 0; i < VOICE_COUNT; i++)
+        {
+            voices[i].env.attack((float)value*(float)10);
+        }
+    }
+    
+    void set_envelope_hold(byte value)
+    {
+        if (value > 127) value = 127;
+        envHold = value;
+        for (int i = 0; i < VOICE_COUNT; i++)
+        {
+            voices[i].env.hold((float)value*(float)10);
+        }
+    }
+    
+    void set_envelope_decay(byte value)
+    {
+        if (value > 127) value = 127;
+        envDecay = value;
+        for (int i = 0; i < VOICE_COUNT; i++)
+        {
+            voices[i].env.decay((float)value*(float)10);
+        }
+    }
+    
+    void set_envelope_sustain(byte value)
+    {
+        if (value > 100) value = 100;
+        envSustain = value;
+        for (int i = 0; i < VOICE_COUNT; i++)
+        {
+            voices[i].env.sustain(value*DIV100);
+        }
+    }
+    
+    void set_envelope_release(byte value)
+    {
+        if (value > 127) value = 127;
+        envRelease = value;
+        for (int i = 0; i < VOICE_COUNT; i++)
+        {
+            voices[i].env.release((float)value*(float)10);
+        }
+    }
+    
+    void set_OSC_A_freqMult(byte value)
+    {
+        if (value > 127) value = 64;
+        oscApitchMult = value; // local storage for LOAD/SAVE/sendAllSettings()
+        for (int i = 0; i < VOICE_COUNT; i++)
+        {
+            voices[i].oscApitchMult = value;
+        }
+    }
+    
+    void set_OSC_B_freqMult(byte value)
+    {
+        if (value > 127) value = 64;
+        oscBpitchMult = value; // local storage for LOAD/SAVE/sendAllSettings()
+        for (int i = 0; i < VOICE_COUNT; i++)
+        {
+            voices[i].oscBpitchMult = value;
+        }
+    }
+    
+    void set_OSC_C_freqMult(byte value)
+    {
+        if (value > 127) value = 64;
+        oscCpitchMult = value; // local storage for LOAD/SAVE/sendAllSettings()
+        for (int i = 0; i < VOICE_COUNT; i++)
+        {
+            voices[i].oscCpitchMult = value;
+        }
+    }
     void sendAllSettings()
     {
         usbMIDI.sendControlChange(0, currentWTinstrument, 0x00);
@@ -520,6 +509,47 @@ class Synth
         set_OSC_A_freqMult(EEPROM.read(108));
         set_OSC_A_freqMult(EEPROM.read(109));
         set_OSC_A_freqMult(EEPROM.read(110));
+    }
+    
+    void set_OSC_A_amplitude(byte value)
+    {
+        if (value > 100) value = 100;
+        oscAamp = value;
+        for (int i = 0; i < VOICE_COUNT; i++)
+        {
+            voices[i].mix.gain(0,value*DIV100);
+        }
+    }
+    
+    void set_OSC_B_amplitude(byte value)
+    {
+        if (value > 100) value = 100;
+        oscBamp = value;
+        for (int i = 0; i < VOICE_COUNT; i++)
+        {
+            voices[i].mix.gain(1, value*DIV100);
+        }
+    }
+    
+    void set_OSC_C_amplitude(byte value)
+    {
+        if (value > 100) value = 100;
+        oscCamp = value;
+        for (int i = 0; i < VOICE_COUNT; i++)
+        {
+            voices[i].mix.gain(2, value*DIV100);
+        }
+    }
+    
+    // this is the wavetable
+    void set_OSC_D_amplitude(byte value)
+    {
+        if (value > 100) value = 100;
+        oscDamp = value;
+        for (int i = 0; i < VOICE_COUNT; i++)
+        {
+            voices[i].mix.gain(3, value*DIV100);
+        }
     }
     
 };
