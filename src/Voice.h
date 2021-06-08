@@ -29,7 +29,7 @@ class Voice
     AudioSynthWaveform               oscB;
     AudioSynthWaveform               oscC;
     AudioSynthWavetable              waveTable;
-    AudioMixer<4>                    mix;
+    AudioMixer4                      mix;
     AudioEffectEnvelope              env;
     AudioConnection                  *patchCord[5]; // total patchCordCount:5 including array typed ones.
 

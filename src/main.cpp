@@ -41,15 +41,21 @@ void uartMidi_NoteOff(byte channel, byte note, byte velocity);
 void uartMidi_ControlChange(byte channel, byte control, byte value);
 void uartMidi_PitchBend(byte channel, int value);
 
+
 void usbMidi_NoteOn(byte channel, byte note, byte velocity);
 void usbMidi_NoteOff(byte channel, byte note, byte velocity);
 void usbMidi_ControlChange(byte channel, byte control, byte value);
 void usbMidi_PitchBend(byte channel, int value);
 
+
+void uartMidi_ProgramChange(byte channel, byte value);
+void usbMidi_ProgramChange(byte channel, byte value);
+
 void blinkLedTask(void);
 void btnInputProcessTask(void);
 
 #include "Synth.h"
+
 
 Synth synth;
 //#include "generatedCode.h"
@@ -74,13 +80,19 @@ void setup()
   MIDI.setHandleNoteOff(uartMidi_NoteOff);
   MIDI.setHandleControlChange(uartMidi_ControlChange);
   MIDI.setHandlePitchBend(uartMidi_PitchBend);
+  MIDI.setHandleProgramChange(uartMidi_ProgramChange);
 
   usbMIDI.setHandleNoteOn(usbMidi_NoteOn);
   usbMIDI.setHandleNoteOff(usbMidi_NoteOff);
   usbMIDI.setHandleControlChange(usbMidi_ControlChange);
   usbMIDI.setHandlePitchChange(usbMidi_PitchBend);
+  usbMIDI.setHandleProgramChange(usbMidi_ProgramChange);
 
   synth.begin();
+  synth.SetWaveForm_As_Primary();
+  //synth.SetWaveTable_As_Primary();
+  synth.handleMidiProgramChange(0);
+  //synth.set_Instrument(*GMinst[0]);
   //ocMain.begin();
 
   pinMode(btnSustainPin, INPUT);
@@ -132,6 +144,20 @@ void uartMidi_ControlChange(byte channel, byte control, byte value) {
 void uartMidi_PitchBend(byte channel, int value) {
     usbMIDI.sendPitchBend(value, channel, 0x00);
 }
+void uartMidi_ProgramChange(byte channel, byte value) {
+    synth.SetWaveTable_As_Primary();
+    if (value > 127) value = 127;
+    synth.currentWTinstrument = value;
+    synth.handleMidiProgramChange(value);
+    //synth.set_Instrument(*GMinst[value]);
+}
+void usbMidi_ProgramChange(byte channel, byte value) {
+    synth.SetWaveTable_As_Primary();
+    if (value > 127) value = 127;
+    synth.currentWTinstrument = value;
+    synth.handleMidiProgramChange(value);
+    //synth.set_Instrument(*GMinst[value]);
+}
 
 void usbMidi_NoteOn(byte channel, byte note, byte velocity) {
     synth.noteOn(note, velocity);
@@ -154,7 +180,8 @@ void usbMidi_ControlChange(byte channel, byte control, byte value) {
             synth.activateSustain();
           break;
         case 0:
-          synth.set_InstrumentByIndex(value);
+          if (value == 0) synth.SetWaveForm_As_Primary();
+          else if (value == 1) synth.SetWaveTable_As_Primary();
           break;
         case 20: // OSC A waveform select
           synth.set_OSC_A_waveform(value);
@@ -316,8 +343,10 @@ void btnInputProcessTask(void)
         btnNextInstrumentWasPressed = 1;
         if (synth.currentWTinstrument == (InstrumentCount - 1)) synth.currentWTinstrument = 0;
         else synth.currentWTinstrument++;
-        synth.set_InstrumentByIndex(synth.currentWTinstrument);
-        usbMIDI.sendControlChange(0, synth.currentWTinstrument, 0x00);
+        synth.handleMidiProgramChange(synth.currentWTinstrument);
+        //synth.set_Instrument(*GMinst[synth.currentWTinstrument]);
+        //synth.set_InstrumentByIndex(synth.currentWTinstrument);
+        usbMIDI.sendProgramChange(0, synth.currentWTinstrument, 0x00);
     }
     else if ((btnNextInstrument == HIGH) && (btnNextInstrumentWasPressed == 1))
     {

@@ -7,10 +7,12 @@
 #include "Voice.h"
 #include <MIDI.h>
 #include <EEPROM.h>
-#include "instruments/VelocityGrandPiano_samples.h"
-#include "instruments/MmmmHumSynth_samples.h"
-#include "instruments/ObieSynth1_samples.h"
-#include "instruments/StereoGrand1_samples.h"
+
+#include "GMinstrument/GMinst.h"
+//#include "instruments/VelocityGrandPiano_samples.h"
+//#include "instruments/MmmmHumSynth_samples.h"
+//#include "instruments/ObieSynth1_samples.h"
+//#include "instruments/StereoGrand1_samples.h"
 #include "theMixer.h"
  
 // Teensy4PolySynth: begin automatically generated code
@@ -21,10 +23,10 @@
 class Synth
 {
  public:
-    const static int VOICE_COUNT = 80;
+    const static int VOICE_COUNT = 40;
     #define NOTE_PRESSED_STATE_LED  6
     #define NOTE_OVERFLOWN_LED      5
-    #define InstrumentCount 5
+    #define InstrumentCount 128
     
     const float DIV127 = (1.0 / 127.0);
     const float DIV100 = 0.01;
@@ -102,7 +104,8 @@ class Synth
     
         EEPROM_ReadSettings();
     
-        set_InstrumentByIndex(1); // VelocityGrandPiano
+        //set_InstrumentByIndex(1); // VelocityGrandPiano
+        
         //mixFinal.gain(1.0f);
     }
     
@@ -171,8 +174,15 @@ class Synth
                 voices[i].noteOff();
         }
     }
+    void handleMidiProgramChange(byte value) {
+        for (int i = 0; i< VOICE_COUNT; i++)
+        {
+            voices[i].waveTable.setInstrument(*GMinst[value]);
+            voices[i].waveTable.amplitude(1.0);
+        }
+    }
     
-    void set_InstrumentByIndex(byte index)
+    void setInstrumentByIndex(byte index)
     {
         currentWTinstrument = index;
         switch(index)
@@ -182,34 +192,34 @@ class Synth
                 break;
             case 1:
                 SetWaveTable_As_Primary();
-                set_Instrument(VelocityGrandPiano);
+                //set_Instrument(VelocityGrandPiano);
                 //synth_set_Instrument(_16layerspiano);
                 break;
             case 2:
                 SetWaveTable_As_Primary();
-                set_Instrument(StereoGrand1);
+                //set_Instrument(StereoGrand1);
                 break;
             case 3:
                 SetWaveTable_As_Primary();
-                set_Instrument(ObieSynth1);
+               //set_Instrument(ObieSynth1);
                 break;
             case 4:
                 SetWaveTable_As_Primary();
-                set_Instrument(MmmmHumSynth);
+                //set_Instrument(MmmmHumSynth);
                 break;
             default:
                 break;
         }
     }
     
-    void set_Instrument(const AudioSynthWavetable::instrument_data &instrument)
+    /*void set_Instrument(const AudioSynthWavetable::instrument_data *instrument)
     {
         for (int i = 0; i< VOICE_COUNT; i++)
         {
-            voices[i].waveTable.setInstrument(instrument);
+            voices[i].waveTable.setInstrument(**instrument);
             voices[i].waveTable.amplitude(1.0);
         }
-    }
+    }*/
     
     void set_mixVoices_gains(byte value)
     {
