@@ -9,11 +9,12 @@
 #include <EEPROM.h>
 
 #include "GMinstrument/GMinst.h"
-//#include "instruments/VelocityGrandPiano_samples.h"
-//#include "instruments/MmmmHumSynth_samples.h"
-//#include "instruments/ObieSynth1_samples.h"
-//#include "instruments/StereoGrand1_samples.h"
+#include "constData.h" // to get instrumentNames
+
+
 #include "theMixer.h"
+
+
  
 // Teensy4PolySynth: begin automatically generated code
 

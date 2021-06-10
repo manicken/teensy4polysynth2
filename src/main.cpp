@@ -12,6 +12,18 @@
 #include <SerialFlash.h>
 #include <MIDI.h>
 
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+#include "constData.h"
+
+#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 32 // OLED display height, in pixels
+
+#define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
+Adafruit_SSD1306 display(128, 32, &Wire, -1); // -1 = no reset pin
+
 
 const int ledPin = 13;
 int ledState = LOW;             // ledState used to set the LED
@@ -28,13 +40,21 @@ unsigned long ledBlinkOffInterval = 2000;
 uint8_t btnSustain = 0;
 uint8_t btnSostenuto = 0;
 uint8_t btnSoftPedal = 0;
-uint8_t btnSustainWasPressed = 0;
-uint8_t btnSostenutoWasPressed = 0;
-uint8_t btnSoftPedalWasPressed = 0;
+uint8_t btnSustainPressed = 0;
+uint8_t btnSostenutoPressed = 0;
+uint8_t btnSoftPedalPressed = 0;
 
 #define btnNextInstrumentPin 20
 uint8_t btnNextInstrument = 0;
-uint8_t btnNextInstrumentWasPressed = 0;
+uint8_t btnNextInstrumentPressed = 0;
+
+#define btnSelectInstrumentsA_Pin 17
+uint8_t btnSelectInstrumentsA = 0;
+uint8_t btnSelectInstrumentsA_Pressed = 0;
+
+#define btnSelectInstrumentsB_Pin 16
+uint8_t btnSelectInstrumentsB = 0;
+uint8_t btnSelectInstrumentsB_Pressed = 0;
 
 void uartMidi_NoteOn(byte channel, byte note, byte velocity);
 void uartMidi_NoteOff(byte channel, byte note, byte velocity);
@@ -70,8 +90,29 @@ MIDI_CREATE_INSTANCE(HardwareSerial, Serial1, MIDI);
 
 void setup()
 {
-  AudioMemory(96);
+    AudioMemory(96);
 
+    if (display.begin(SSD1306_SWITCHCAPVCC, 0x3C))
+    {
+        delay(2000);
+        display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+        delay(2000);
+        display.clearDisplay();
+        display.display();
+        //display.setFont(&FreeMono9pt7b);
+        display.setTextSize(1);
+        display.setTextColor(WHITE, BLACK);
+        display.setCursor(0, 0);
+        // Display static text
+        display.println("Manicken Poly Synth");
+        display.display();
+        //delay(1000);
+    }
+    else{
+        //DEBUG_UART.println(F("oled init fail"));
+        //if (display.begin(SSD1306_SWITCHCAPVCC, 0x3D))
+        //    DEBUG_UART.println(F("oled addr is 0x3D"));
+    }
   //mix4.gain(1/4);
   //mix2.gain(1/2);
   
@@ -99,6 +140,8 @@ void setup()
   pinMode(btnSostenutoPin, INPUT);
   pinMode(btnSoftPedalPin, INPUT);
   pinMode(btnNextInstrumentPin, INPUT);
+  pinMode(btnSelectInstrumentsA_Pin, INPUT);
+  pinMode(btnSelectInstrumentsB_Pin, INPUT);
 
   pinMode(btnInEnablePin, OUTPUT);
   digitalWrite(btnInEnablePin, LOW);
@@ -106,11 +149,15 @@ void setup()
   pinMode(ledPin, OUTPUT);
   digitalWrite(ledPin, LOW);
 
-  btnSustainWasPressed = 0;
-  btnSoftPedalWasPressed = 0;
-  btnSostenutoWasPressed = 0;
-  btnNextInstrumentWasPressed = 0;
+  btnSustainPressed = 0;
+  btnSoftPedalPressed = 0;
+  btnSostenutoPressed = 0;
+  btnNextInstrumentPressed = 0;
+  btnSelectInstrumentsA_Pressed = 0;
+  btnSelectInstrumentsB_Pressed = 0;
   
+
+
 }
 
 void loop()
@@ -125,16 +172,51 @@ void loop()
 
 void uartMidi_NoteOn(byte channel, byte note, byte velocity) {
     note += KEYBOARD_NOTE_SHIFT_CORRECTION;
-    velocity = 127 - velocity;
-    synth.noteOn(note, velocity);
-    usbMIDI.sendNoteOn(note, velocity, channel, 0);
+    if (btnSelectInstrumentsA_Pressed == 0 && btnSelectInstrumentsB_Pressed == 0) {
+        velocity = 127 - velocity;
+        synth.noteOn(note, velocity);
+        usbMIDI.sendNoteOn(note, velocity, channel, 0);
+    }
+    else {
+        if (note < 36) note = 0;
+        else {
+            note -= 36;
+            if (note > 63) note = 63;
+        }
+        if (btnSelectInstrumentsA_Pressed == 1) {
+            synth.handleMidiProgramChange(note);
+
+            display.setCursor(0, 7);
+            display.println(instrumentNames[note]);
+
+            display.setCursor(0, 24);
+            display.print(note);
+
+            display.display();
+        }
+        else if (btnSelectInstrumentsB_Pressed == 1) {
+            synth.handleMidiProgramChange(note+64);
+
+            display.setCursor(0, 7);
+            display.println(instrumentNames[note+64]);
+            
+            display.setCursor(0, 24);
+            display.print(note+64);
+
+            display.display();
+        }
+
+        
+    }
 }
 
 void uartMidi_NoteOff(byte channel, byte note, byte velocity) {
     note += KEYBOARD_NOTE_SHIFT_CORRECTION;
-    velocity = 127 - velocity;
-    synth.noteOff(note);
-    usbMIDI.sendNoteOff(note, velocity, channel, 0);
+    if (btnSelectInstrumentsA_Pressed == 0 && btnSelectInstrumentsB_Pressed == 0) {
+        velocity = 127 - velocity;
+        synth.noteOff(note);
+        usbMIDI.sendNoteOff(note, velocity, channel, 0);
+    }
 }
 
 void uartMidi_ControlChange(byte channel, byte control, byte value) {
@@ -278,18 +360,20 @@ void usbMidi_ControlChange(byte channel, byte control, byte value) {
         break;
     }
 }
-
+uint8_t mode = 0;
 void btnInputProcessTask(void)
 {
   btnSustain = digitalRead(btnSustainPin);
   btnSostenuto = digitalRead(btnSostenutoPin);
   btnSoftPedal = digitalRead(btnSoftPedalPin);
   btnNextInstrument = digitalRead(btnNextInstrumentPin);
+  btnSelectInstrumentsA = digitalRead(btnSelectInstrumentsA_Pin);
+  btnSelectInstrumentsB = digitalRead(btnSelectInstrumentsB_Pin);
 
     // Sustain pedal
-    if ((btnSustain == LOW) && (btnSustainWasPressed == 0))
+    if ((btnSustain == LOW) && (btnSustainPressed == 0))
     {
-        btnSustainWasPressed = 1;
+        btnSustainPressed = 1;
         usbMIDI.sendControlChange(0x40, 0x7F, 0x00);
         synth.activateSustain();
 
@@ -309,48 +393,69 @@ void btnInputProcessTask(void)
         data[10] = 0x30 + cpu_used%10000%1000%100%10;
         usbMIDI.sendSysEx(11, data);
     }
-    else if ((btnSustain == HIGH) && (btnSustainWasPressed == 1))
+    else if ((btnSustain == HIGH) && (btnSustainPressed == 1))
     {
-        btnSustainWasPressed = 0;
+        btnSustainPressed = 0;
         usbMIDI.sendControlChange(0x40, 0x00, 0x00);
         synth.deactivateSustain();
     }
     // Sostenuto Pedal
-    if ((btnSostenuto == LOW) && (btnSostenutoWasPressed == 0))
+    if ((btnSostenuto == LOW) && (btnSostenutoPressed == 0))
     {
-        btnSostenutoWasPressed = 1;
+        btnSostenutoPressed = 1;
         usbMIDI.sendControlChange(0x42, 0x7F, 0x00);
     }
-    else if ((btnSostenuto == HIGH) && (btnSostenutoWasPressed == 1))
+    else if ((btnSostenuto == HIGH) && (btnSostenutoPressed == 1))
     {
-        btnSostenutoWasPressed = 0;
+        btnSostenutoPressed = 0;
         usbMIDI.sendControlChange(0x42, 0x00, 0x00);
     }
     // Soft Pedal
-    if ((btnSoftPedal == LOW) && (btnSoftPedalWasPressed == 0))
+    if ((btnSoftPedal == LOW) && (btnSoftPedalPressed == 0))
     {
-        btnSoftPedalWasPressed = 1;
+        btnSoftPedalPressed = 1;
         usbMIDI.sendControlChange(0x43, 0x7F, 0x00);
     }
-    else if ((btnSoftPedal == HIGH) && (btnSoftPedalWasPressed == 1))
+    else if ((btnSoftPedal == HIGH) && (btnSoftPedalPressed == 1))
     {
-        btnSoftPedalWasPressed = 0;
+        btnSoftPedalPressed = 0;
         usbMIDI.sendControlChange(0x43, 0x00, 0x00);
     }
     // Next Instrument button
-    if ((btnNextInstrument == LOW) && (btnNextInstrumentWasPressed == 0))
+    if ((btnNextInstrument == LOW) && (btnNextInstrumentPressed == 0))
     {
-        btnNextInstrumentWasPressed = 1;
-        if (synth.currentWTinstrument == (InstrumentCount - 1)) synth.currentWTinstrument = 0;
+        btnNextInstrumentPressed = 1;
+
+        if (mode == 0) { mode = 1; synth.SetWaveTable_As_Primary(); }
+        else if (mode == 1) { mode = 0; synth.SetWaveForm_As_Primary(); }
+        /*if (synth.currentWTinstrument == (128 - 1)) synth.currentWTinstrument = 0;
         else synth.currentWTinstrument++;
+        
         synth.handleMidiProgramChange(synth.currentWTinstrument);
-        //synth.set_Instrument(*GMinst[synth.currentWTinstrument]);
-        //synth.set_InstrumentByIndex(synth.currentWTinstrument);
-        usbMIDI.sendProgramChange(0, synth.currentWTinstrument, 0x00);
+        usbMIDI.sendProgramChange(0, synth.currentWTinstrument, 0x00);*/
     }
-    else if ((btnNextInstrument == HIGH) && (btnNextInstrumentWasPressed == 1))
+    else if ((btnNextInstrument == HIGH) && (btnNextInstrumentPressed == 1))
     {
-        btnNextInstrumentWasPressed = 0;
+        btnNextInstrumentPressed = 0;
+    }
+
+    if ((btnSelectInstrumentsA == LOW) && (btnSelectInstrumentsA_Pressed == 0)) {
+        btnSelectInstrumentsA_Pressed = 1;
+        display.setCursor(0, 0);
+        display.println("Instruments 0-63     ");
+        display.display();
+    }
+    else if ((btnSelectInstrumentsA == HIGH) && (btnSelectInstrumentsA_Pressed == 1)) {
+        btnSelectInstrumentsA_Pressed = 0;
+    }
+    if ((btnSelectInstrumentsB == LOW) && (btnSelectInstrumentsB_Pressed == 0)) {
+        btnSelectInstrumentsB_Pressed = 1;
+        display.setCursor(0, 0);
+        display.println("Instruments 64-127   ");
+        display.display();
+    }
+    else if ((btnSelectInstrumentsA == HIGH) && (btnSelectInstrumentsB_Pressed == 1)) {
+        btnSelectInstrumentsB_Pressed = 0;
     }
 }
 
