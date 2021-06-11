@@ -33,10 +33,10 @@ unsigned long currentInterval = 0;
 unsigned long ledBlinkOnInterval = 100;
 unsigned long ledBlinkOffInterval = 2000;
 
-#define btnInEnablePin 9
-#define btnSustainPin 23
-#define btnSostenutoPin 22
-#define btnSoftPedalPin 21
+#define btnInEnable_Pin 9
+#define btnSustain_Pin 23
+#define btnSostenuto_Pin 22
+#define btnSoftPedal_Pin 21
 uint8_t btnSustain = 0;
 uint8_t btnSostenuto = 0;
 uint8_t btnSoftPedal = 0;
@@ -44,9 +44,9 @@ uint8_t btnSustainPressed = 0;
 uint8_t btnSostenutoPressed = 0;
 uint8_t btnSoftPedalPressed = 0;
 
-#define btnNextInstrumentPin 20
-uint8_t btnNextInstrument = 0;
-uint8_t btnNextInstrumentPressed = 0;
+#define btnSelectSynthMode_Pin 20
+uint8_t btnSelectSynthMode = 0;
+uint8_t btnSelectSynthMode_Pressed = 0;
 
 #define btnSelectInstrumentsA_Pin 17
 uint8_t btnSelectInstrumentsA = 0;
@@ -55,6 +55,8 @@ uint8_t btnSelectInstrumentsA_Pressed = 0;
 #define btnSelectInstrumentsB_Pin 16
 uint8_t btnSelectInstrumentsB = 0;
 uint8_t btnSelectInstrumentsB_Pressed = 0;
+
+uint8_t synthMode = 0;
 
 void uartMidi_NoteOn(byte channel, byte note, byte velocity);
 void uartMidi_NoteOff(byte channel, byte note, byte velocity);
@@ -73,6 +75,9 @@ void usbMidi_ProgramChange(byte channel, byte value);
 
 void blinkLedTask(void);
 void btnInputProcessTask(void);
+
+void display_update_mode(void);
+void display_update_instrument(void);
 
 #include "Synth.h"
 
@@ -136,15 +141,15 @@ void setup()
   //synth.set_Instrument(*GMinst[0]);
   //ocMain.begin();
 
-  pinMode(btnSustainPin, INPUT);
-  pinMode(btnSostenutoPin, INPUT);
-  pinMode(btnSoftPedalPin, INPUT);
-  pinMode(btnNextInstrumentPin, INPUT);
+  pinMode(btnSustain_Pin, INPUT);
+  pinMode(btnSostenuto_Pin, INPUT);
+  pinMode(btnSoftPedal_Pin, INPUT);
+  pinMode(btnSelectSynthMode_Pin, INPUT);
   pinMode(btnSelectInstrumentsA_Pin, INPUT);
   pinMode(btnSelectInstrumentsB_Pin, INPUT);
 
-  pinMode(btnInEnablePin, OUTPUT);
-  digitalWrite(btnInEnablePin, LOW);
+  pinMode(btnInEnable_Pin, OUTPUT);
+  digitalWrite(btnInEnable_Pin, LOW);
 
   pinMode(ledPin, OUTPUT);
   digitalWrite(ledPin, LOW);
@@ -152,11 +157,11 @@ void setup()
   btnSustainPressed = 0;
   btnSoftPedalPressed = 0;
   btnSostenutoPressed = 0;
-  btnNextInstrumentPressed = 0;
+  btnSelectSynthMode_Pressed = 0;
   btnSelectInstrumentsA_Pressed = 0;
   btnSelectInstrumentsB_Pressed = 0;
   
-
+  display_update_mode();
 
 }
 
@@ -168,6 +173,46 @@ void loop()
     btnInputProcessTask();
     
     blinkLedTask();
+}
+
+void display_clear_line(uint8_t yPos) {
+    display.setCursor(0, yPos);
+    display.drawRect(0, yPos, 128, 8, 0);//.println("                     "); // clear line
+}
+
+void display_update_mode(void) {
+    display.clearDisplay();
+    if (synthMode == 0) {
+        display.setCursor(0, 0);
+        display.println("WaveForm Synth");
+        display.display();
+    } else {
+        display.setCursor(0, 0);
+        if (btnSelectInstrumentsA_Pressed == 1 || btnSelectInstrumentsB_Pressed == 1) {
+            display.println("Instruments");
+            display.setCursor(6*12, 0);
+            if (btnSelectInstrumentsA_Pressed == 1)
+                display.println("0-63");
+            else //if (btnSelectInstrumentsB_Pressed == 1)
+                display.println("64-127");
+        }
+        else
+        {
+            display.println("WaveTable Synth");
+        }
+        display_update_instrument(); // this runs display.display();
+    }
+}
+
+void display_update_instrument(void) {
+    display_clear_line(10);
+    display.setCursor(0, 10);
+    display.println(instrumentNames[synth.currentWTinstrument]);
+
+    display.setCursor(0, 24);
+    display.print(synth.currentWTinstrument);
+
+    display.display();
 }
 
 void uartMidi_NoteOn(byte channel, byte note, byte velocity) {
@@ -183,30 +228,14 @@ void uartMidi_NoteOn(byte channel, byte note, byte velocity) {
             note -= 36;
             if (note > 63) note = 63;
         }
+        synth.SetWaveTable_As_Primary();
         if (btnSelectInstrumentsA_Pressed == 1) {
             synth.handleMidiProgramChange(note);
-
-            display.setCursor(0, 7);
-            display.println(instrumentNames[note]);
-
-            display.setCursor(0, 24);
-            display.print(note);
-
-            display.display();
         }
         else if (btnSelectInstrumentsB_Pressed == 1) {
             synth.handleMidiProgramChange(note+64);
-
-            display.setCursor(0, 7);
-            display.println(instrumentNames[note+64]);
-            
-            display.setCursor(0, 24);
-            display.print(note+64);
-
-            display.display();
         }
-
-        
+        display_update_instrument();
     }
 }
 
@@ -360,13 +389,13 @@ void usbMidi_ControlChange(byte channel, byte control, byte value) {
         break;
     }
 }
-uint8_t mode = 0;
+
 void btnInputProcessTask(void)
 {
-  btnSustain = digitalRead(btnSustainPin);
-  btnSostenuto = digitalRead(btnSostenutoPin);
-  btnSoftPedal = digitalRead(btnSoftPedalPin);
-  btnNextInstrument = digitalRead(btnNextInstrumentPin);
+  btnSustain = digitalRead(btnSustain_Pin);
+  btnSostenuto = digitalRead(btnSostenuto_Pin);
+  btnSoftPedal = digitalRead(btnSoftPedal_Pin);
+  btnSelectSynthMode = digitalRead(btnSelectSynthMode_Pin);
   btnSelectInstrumentsA = digitalRead(btnSelectInstrumentsA_Pin);
   btnSelectInstrumentsB = digitalRead(btnSelectInstrumentsB_Pin);
 
@@ -421,41 +450,47 @@ void btnInputProcessTask(void)
         btnSoftPedalPressed = 0;
         usbMIDI.sendControlChange(0x43, 0x00, 0x00);
     }
-    // Next Instrument button
-    if ((btnNextInstrument == LOW) && (btnNextInstrumentPressed == 0))
+    // Select synth mode button
+    if ((btnSelectSynthMode == LOW) && (btnSelectSynthMode_Pressed == 0))
     {
-        btnNextInstrumentPressed = 1;
+        btnSelectSynthMode_Pressed = 1;
 
-        if (mode == 0) { mode = 1; synth.SetWaveTable_As_Primary(); }
-        else if (mode == 1) { mode = 0; synth.SetWaveForm_As_Primary(); }
+        if (synthMode == 0) { 
+            synthMode = 1;
+            synth.SetWaveTable_As_Primary();
+        }
+        else if (synthMode == 1) { 
+            synthMode = 0;
+            synth.SetWaveForm_As_Primary();
+        }
+        display_update_mode();
         /*if (synth.currentWTinstrument == (128 - 1)) synth.currentWTinstrument = 0;
         else synth.currentWTinstrument++;
         
         synth.handleMidiProgramChange(synth.currentWTinstrument);
         usbMIDI.sendProgramChange(0, synth.currentWTinstrument, 0x00);*/
     }
-    else if ((btnNextInstrument == HIGH) && (btnNextInstrumentPressed == 1))
+    else if ((btnSelectSynthMode == HIGH) && (btnSelectSynthMode_Pressed == 1))
     {
-        btnNextInstrumentPressed = 0;
+        btnSelectSynthMode_Pressed = 0;
     }
 
     if ((btnSelectInstrumentsA == LOW) && (btnSelectInstrumentsA_Pressed == 0)) {
         btnSelectInstrumentsA_Pressed = 1;
-        display.setCursor(0, 0);
-        display.println("Instruments 0-63     ");
-        display.display();
+        display_update_mode();
     }
     else if ((btnSelectInstrumentsA == HIGH) && (btnSelectInstrumentsA_Pressed == 1)) {
         btnSelectInstrumentsA_Pressed = 0;
+        display_update_mode();
     }
+
     if ((btnSelectInstrumentsB == LOW) && (btnSelectInstrumentsB_Pressed == 0)) {
         btnSelectInstrumentsB_Pressed = 1;
-        display.setCursor(0, 0);
-        display.println("Instruments 64-127   ");
-        display.display();
+        display_update_mode();
     }
-    else if ((btnSelectInstrumentsA == HIGH) && (btnSelectInstrumentsB_Pressed == 1)) {
+    else if ((btnSelectInstrumentsB == HIGH) && (btnSelectInstrumentsB_Pressed == 1)) {
         btnSelectInstrumentsB_Pressed = 0;
+        display_update_mode();
     }
 }
 

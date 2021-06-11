@@ -176,6 +176,7 @@ class Synth
         }
     }
     void handleMidiProgramChange(byte value) {
+        currentWTinstrument = value;
         for (int i = 0; i< VOICE_COUNT; i++)
         {
             voices[i].waveTable.setInstrument(*GMinst[value]);
@@ -236,7 +237,7 @@ class Synth
         set_OSC_B_amplitude(0);
         set_OSC_C_amplitude(0);
         set_OSC_D_amplitude(100);
-        set_mixVoices_gains(100);
+        set_mixVoices_gains(33);
     }
     
     void SetWaveForm_As_Primary()

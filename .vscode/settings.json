@@ -1,6 +1,9 @@
 {
     "files.associations": {
         "type_traits": "cpp",
-        "utility": "cpp"
+        "utility": "cpp",
+        "string": "cpp",
+        "limits": "cpp",
+        "cmath": "cpp"
     }
 }
