@@ -177,7 +177,7 @@ void loop()
 
 void display_clear_line(uint8_t yPos) {
     display.setCursor(0, yPos);
-    display.drawRect(0, yPos, 128, 8, 0);//.println("                     "); // clear line
+    display.println("                     "); // clear line
 }
 
 void display_update_mode(void) {
@@ -205,12 +205,17 @@ void display_update_mode(void) {
 }
 
 void display_update_instrument(void) {
-    display_clear_line(10);
-    display.setCursor(0, 10);
+
+    display.setCursor(0, 12);
+    display.println("   "); // clear prev.
+    display.setCursor(0, 12);
+    display.print(synth.currentWTinstrument);
+
+    display_clear_line(24);
+    display.setCursor(0, 24);
     display.println(instrumentNames[synth.currentWTinstrument]);
 
-    display.setCursor(0, 24);
-    display.print(synth.currentWTinstrument);
+    
 
     display.display();
 }

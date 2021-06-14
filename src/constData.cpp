@@ -1,7 +1,7 @@
 
 // ****** Start Of Included File:constData.cpp ****** 
 #include "constdata.h"
-
+/*
 const char * instrumentNames[] = {
   "Piano1",
   "Piano1",
@@ -132,7 +132,8 @@ const char * instrumentNames[] = {
   "Shanai",
   "Shanai"
 };
-/*
+*/
+
 const char * instrumentNames[] = {
   "Piano1",
   "Piano2",
@@ -263,5 +264,5 @@ const char * instrumentNames[] = {
   "Applause",
   "(missing) gun shot"
 };
-*/
+
 // ****** End Of Included file:constData.cpp ******
